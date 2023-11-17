@@ -10,6 +10,9 @@ struct Player;
 #[derive(Component)]
 struct MyGameCamera;
 
+#[derive(Component)]
+struct Snowball;
+
 
 /// set up a simple 3D scene
 fn setup(
@@ -92,6 +95,27 @@ fn sync_player_camera(
     }
 }
 
+fn throw_snowball(
+    mut player: Query<(&Player, &mut Transform), Without<MyGameCamera>>,
+    keyboard_input: ResMut<Input<KeyCode>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for (_, player_transform) in player.iter_mut() {
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            let snowball = player_transform.translation + player_transform.forward() * 1.0;
+            commands.spawn(PbrBundle {
+                mesh: meshes.add(Mesh::try_from(shape::Icosphere{
+                    radius: 0.2,
+                    subdivisions: 10,
+                }).unwrap()),
+                transform: Transform::from_translation(snowball),
+                ..default()
+            });
+        }
+    }
+
+}
 
 fn main() {
     App::new()
@@ -106,6 +130,6 @@ fn main() {
             ..Default::default()
         })
         .add_systems(Startup, setup)
-        .add_systems(Update, (move_circle, sync_player_camera))
+        .add_systems(Update, (move_circle, sync_player_camera, throw_snowball))
         .run();
 }
