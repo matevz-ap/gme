@@ -1,25 +1,9 @@
 //! Shows how to render simple primitive shapes with a single color.
 
 use std::time::Duration;
-
+use bevy::input::mouse::MouseMotion;
 use bevy::{prelude::*, winit::{WinitSettings, UpdateMode}};
 
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .insert_resource( WinitSettings {
-            focused_mode: UpdateMode::Reactive {
-                wait: Duration::from_secs(10),
-            },
-            unfocused_mode: UpdateMode::ReactiveLowPower {
-                wait: Duration::from_secs(10),
-            },
-            ..Default::default()
-        })
-        .add_systems(Startup, setup)
-        .add_systems(Update, (move_circle, sync_player_camera))
-        .run();
-}
 #[derive(Component)]
 struct Player;
 
@@ -39,7 +23,7 @@ fn setup(
             subdivisions: 10,
         }).unwrap()),
         material: materials.add(Color::WHITE.into()),
-        transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+        transform: Transform::from_xyz(0.0, 0.0, 0.0),
         ..default()
     });
     commands.spawn(PbrBundle {
@@ -48,7 +32,7 @@ fn setup(
             subdivisions: 10,
         }).unwrap()),
         material: materials.add(Color::rgb_u8(124, 144, 255).into()),
-        transform: Transform::from_xyz(4.0, 4.0, 0.0),
+        transform: Transform::from_xyz(0.0, 0.0, 4.5).looking_at(Vec3 { x: 0.0, y: 4.5, z: 4.5 }, Vec3::Y),
         ..default()
     }).insert(Player);
     commands.spawn(PointLightBundle {
@@ -61,54 +45,67 @@ fn setup(
         ..default()
     });
     commands.spawn((Camera3dBundle {
-        transform: Transform::from_xyz(-2.5, 4.5, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(0.0, 0.0, 14.0).looking_at(Vec3::Y, Vec3::Y),
         ..default()
     }, MyGameCamera));
 }
 
-fn move_circle(time: Res<Time>, mut query: Query<(&Player, &mut Transform)>, keyboard_input: ResMut<Input<KeyCode>>) {
+fn move_circle(
+    time: Res<Time>, 
+    mut query: Query<(&Player, &mut Transform)>, 
+    keyboard_input: ResMut<Input<KeyCode>>, 
+    mut motion_evr: EventReader<MouseMotion>,
+) {
     for (_, mut transform) in query.iter_mut() {
-        // let angle = time.delta_seconds() * speed;
-        let angle: f32 = 0.2;
+        let angle:f32 = 0.2;
+
         if keyboard_input.pressed(KeyCode::W) {
-            let center_x: f32 = 0.;
-            let center_y: f32 = 0.;
-            let curr_x = transform.translation.x.clone();
-            let curr_y = transform.translation.y.clone();
-            transform.translation.x = center_x + (curr_x - center_x) * angle.cos() - (curr_y - center_y) * angle.sin();
-            transform.translation.y = center_y + (curr_x - center_x) * angle.sin() + (curr_y - center_y) * angle.cos();
+            transform.translate_around(Vec3::ZERO, Quat::from_rotation_x(-angle));
         }
-
         if keyboard_input.pressed(KeyCode::S) {
-            let center_x: f32 = 0.;
-            let center_y: f32 = 0.;
-            let curr_x = transform.translation.x.clone();
-            let curr_y = transform.translation.y.clone();
-            transform.translation.x = center_x + (curr_x - center_x) * angle.cos() + (curr_y - center_y) * angle.sin();
-            transform.translation.y = center_y + (curr_x - center_x) * angle.sin() - (curr_y - center_y) * angle.cos();
-        } 
-
+            transform.translate_around(Vec3::ZERO, Quat::from_rotation_x(angle));
+        }
         if keyboard_input.pressed(KeyCode::A) {
-            let center_x: f32 = 0.;
-            let center_z: f32 = 0.;
-            let curr_x = transform.translation.x.clone();
-            let curr_z = transform.translation.z.clone();
-            transform.translation.x = center_x + (curr_x - center_x) * angle.cos() - (curr_z - center_z) * angle.sin();
-            transform.translation.z = center_z + (curr_x - center_x) * angle.sin() + (curr_z - center_z) * angle.cos();
+            transform.translate_around(Vec3::ZERO, Quat::from_rotation_y(-angle));
+        }
+        if keyboard_input.pressed(KeyCode::D) {
+            transform.translate_around(Vec3::ZERO, Quat::from_rotation_y(angle));
         }
         
-    }
+        for ev in motion_evr.read() {
+            transform.rotation *= Quat::from_rotation_y(ev.delta.x * 0.01);
+            transform.rotation *= Quat::from_rotation_x(ev.delta.y * 0.01);
+        }
+    }   
 }
 
 fn sync_player_camera(
     mut player: Query<(&Player, &mut Transform), Without<MyGameCamera>>,
     mut camera: Query<(&MyGameCamera, &mut Transform), With<MyGameCamera>>,
 ) {
-    for (_, mut player_transform) in player.iter_mut() {
+    for (_, player_transform) in player.iter_mut() {
         for (_, mut camera_transform) in camera.iter_mut() {
-            camera_transform.translation.x = player_transform.translation.x;
-            camera_transform.translation.y = player_transform.translation.y + 4.5;
-            camera_transform.translation.z = player_transform.translation.z + 9.0;
+            camera_transform.translation = player_transform.translation + player_transform.forward() * 4.0;
+            camera_transform.translation.clamp(Vec3::splat(5.0), Vec3::splat(10.0));
+            camera_transform.look_at(player_transform.translation, Vec3::Y)
         }
     }
+}
+
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .insert_resource( WinitSettings {
+            focused_mode: UpdateMode::Reactive {
+                wait: Duration::from_secs(10),
+            },
+            unfocused_mode: UpdateMode::ReactiveLowPower {
+                wait: Duration::from_secs(10),
+            },
+            ..Default::default()
+        })
+        .add_systems(Startup, setup)
+        .add_systems(Update, (move_circle, sync_player_camera))
+        .run();
 }
